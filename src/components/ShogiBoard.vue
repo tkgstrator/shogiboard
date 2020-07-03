@@ -1,10 +1,10 @@
 <template>
   <div id="shogiboard">
     <div v-for="(item, i) in board" :key="i" class="container">
-      <div v-for="(piece, j) in item[0]" :key="j" class="edge">
+      <div v-for="(piece, j) in item" :key="j" class="edge">
         <p
-          :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': 9 * i + (j + 1) == isSelect, 'empty': piece.match(/[-]/)}"
-          @click="move(i, j, piece)"
+          :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': 9 * i + j == move.prev, 'empty': piece.match(/[-]/)}"
+          @click="selectPiece(i, j, piece)"
         >{{ piece.match(/[A-z]/) ? pieces[piece.toUpperCase()] : "-"}}</p>
         <!-- <div>{{ piece }}</div> -->
       </div>
@@ -23,7 +23,6 @@ export default {
       startpos: String,
       position: String,
       moves: [],
-      isSelect: Number,
       board: [[], [], [], [], [], [], [], [], []],
       pieces: {
         L: "香",
@@ -34,6 +33,21 @@ export default {
         B: "角",
         R: "飛",
         P: "歩"
+      },
+      row: {
+        1: "a",
+        2: "b",
+        3: "c",
+        4: "d",
+        5: "e",
+        6: "f",
+        7: "g",
+        8: "h",
+        9: "i"
+      },
+      move: {
+        prev: null,
+        next: null
       }
     };
   },
@@ -43,7 +57,6 @@ export default {
     document: {
       immediate: false,
       handler() {
-        console.log("Document Watch");
         // 初期状態を配列に変換して将棋盤変数に格納する
         this.startpos = this.document["startpos"]
           .replace(/1/g, "-")
@@ -57,7 +70,9 @@ export default {
           .replace(/9/g, "---------")
           .split(/[/\s]/);
         this.startpos.forEach(function(value, index) {
-          this[index].splice(0, 0, Array.from(value));
+          Array.from(value).forEach(function(value) {
+            this[index].push(value);
+          }, this);
         }, this.board);
         // sfenの値が変化したときの処理を書く（ここで盤面を変化させればよい）
       }
@@ -71,13 +86,46 @@ export default {
     }
   },
   methods: {
-    move(i, j, piece) {
-      if (this.isSelect == 9 * i + (j + 1)) {
-        this.isSelect = Number;
+    selectPiece(i, j, piece) {
+      // 一回目のクリック
+      if (this.move.prev == null) {
+        if (piece != "-") {
+          // 選択だけして終了
+          this.move.prev = 9 * i + j;
+          return;
+        } else {
+          this.move.prev = this.move.next = null;
+          return;
+        }
+      }
+      // 二回目のクリック
+
+      this.move.next = 9 * i + j;
+      // 同じところを二回クリックしたら選択解除
+      if (this.move.prev == this.move.next) {
+        this.move.prev = this.move.next = null;
         return;
       }
-      this.isSelect = 9 * i + (j + 1);
-      console.log(i, j, piece, this.isSelect);
+      // 何も選択していない状態であれば選択して終了
+      if (this.move.prev == null) {
+        this.move.prev = 9 * i + j;
+        return;
+      }
+      // どちらでもなければ前にどこかを選択していて新たに選択
+      this.movePiece(i, j, this.move.prev, this.move.next);
+    },
+    movePiece(i, j, prev, next) {
+      // まずは選択を無効化
+      this.move.prev = null;
+
+      // まずは配列の位置をチェックする
+      let prev_rank = parseInt(prev / 9);
+      let prev_file = prev - 9 * prev_rank;
+      let next_rank = parseInt(next / 9);
+      let next_file = next - 9 * next_rank;
+
+      this.board[next_rank][next_file] = this.board[prev_rank][prev_file];
+      this.board[prev_rank][prev_file] = "-";
     }
   },
   firestore() {
