@@ -15,8 +15,8 @@
       <div v-for="(item, i) in board" :key="i" class="container">
         <div v-for="(piece, j) in item" :key="j" class="edge">
           <p
-            :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': 9 * i + j == move.prev, 'empty': piece.match(/[-]/)}"
-            @click="selectPiece(i, j, piece)"
+            :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': (i == moves.mX) && (j == moves.mY), 'empty': piece.match(/[-]/)}"
+            @click="pickPiece(i, j, piece, 1)"
           >{{ piece.match(/[A-z]/) ? pieces[piece.toUpperCase()] : "-"}}</p>
         </div>
       </div>
@@ -44,7 +44,6 @@ export default {
       document: [],
       startpos: String,
       position: String,
-      moves: [],
       board: [[], [], [], [], [], [], [], [], []],
       capture: {
         black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
@@ -71,9 +70,12 @@ export default {
         8: "h",
         9: "i"
       },
-      move: {
-        prev: null,
-        next: null,
+      moves: {
+        turn: 0,
+        sfen: [],
+        isPicked: false,
+        mX: null,
+        mY: null,
         piece: null
       }
     };
@@ -113,79 +115,88 @@ export default {
     }
   },
   methods: {
-    pickPiece(key, num) {
-      // コマがないところは選択できない（まあ非表示にしてもいいけど）
-      // if (num == 0) {
-      //   console.log("No pieces");
-      //   return;
-      // }
-      // 駒台からとってきたことを示す-1を代入
-      this.move.prev = -1;
-      this.move.piece = key;
-      console.log("Pick", key, num);
-    },
-    selectPiece(i, j, piece) {
-      // 一回目のクリック
-      if (this.move.prev == null) {
-        if (piece != "-") {
-          // 選択だけして終了
-          this.move.prev = 9 * i + j;
-          return;
+    // コマを選択する
+    pickPiece(mX, mY, piece, num) {
+      // 既にコマが選択されていた場合
+      if (this.moves.isPicked) {
+        let prev = this.board[this.moves.mX][this.moves.mY];
+        if (this.checkMovePiece(mX, mY)) {
+          console.log("SUCCESS");
+          this.board[mX].splice(mY, 1, prev);
+          this.board[this.moves.mX].splice(this.moves.mY, 1, "-");
+          this.moves.turn += 1;
+          // this.board[this.moves.mX][this.moves.mY] = "-";
+          // this.board[mX][mY] = this.board[this.moves.mX][this.moves.mY];
+          // this.board[this.moves.mX][this.moves.mY] = "-";
+          // コマを動かします
         } else {
-          this.move.prev = this.move.next = null;
-          return;
+          console.log("ERROR");
         }
-      }
-      // 駒台からとってきた場合
-      if (this.move.prev == -1) {
-        // 空のところになら駒を置ける
-        if (this.board[i][j] == "-") {
-          console.log("Set piece", this.move.piece);
-          this.move.prev = this.move.next = null;
-          this.board[i][j] = this.move.piece;
-          return;
-        } else {
-          console.log("Not empty");
-          return;
-        }
-      }
-
-      // 二回目のクリック
-      this.move.next = 9 * i + j;
-      // 同じところを二回クリックしたら選択解除
-      if (this.move.prev == this.move.next) {
-        this.move.prev = this.move.next = null;
+        console.log("選択状態を解除しました");
+        this.moves.mX = null;
+        this.moves.mY = null;
+        this.moves.isPicked = false;
         return;
       }
-      // 何も選択していない状態であれば選択して終了
-      if (this.move.prev == null) {
-        this.move.prev = 9 * i + j;
+
+      // まだコマが選択されていない場合
+      if (!this.moves.isPicked) {
+        // 手番と違うコマは選択できない
+        if (this.moves.turn % 2 == 0 && piece.match(/[A-Z]/) == null) {
+          console.log("あなたの手番ではありません");
+          return;
+        }
+        if (this.moves.turn % 2 == 1 && piece.match(/[a-z]/) == null) {
+          console.log("あなたの手番ではありません");
+          return;
+        }
+        console.log("コマを選択しました");
+        this.moves.mX = mX;
+        this.moves.mY = mY;
+        this.moves.isPicked = true;
         return;
       }
-      // どちらでもなければ前にどこかを選択していて新たに選択
-      this.movePiece(i, j, this.move.prev, this.move.next);
+      console.log(num);
     },
-    movePiece(i, j, prev, next) {
-      // まずは選択を無効化
-      this.move.prev = null;
-
-      // まずは配列の位置をチェックする
-      let prev_rank = parseInt(prev / 9);
-      let prev_file = prev - 9 * prev_rank;
-      let next_rank = parseInt(next / 9);
-      let next_file = next - 9 * next_rank;
-
-      // 移動先にあった駒を持ち駒として追加する
-      let piece = this.board[next_rank][next_file];
-      // 移動先の駒が後手の駒なら先手の駒台に追加する
-      if (piece.match(/[a-z]/)) {
-        this.capture.black[piece.toUpperCase()] += 1;
+    // コマが移動可能かどうかを判定し、真理値を返す関数
+    checkMovePiece(mX, mY) {
+      console.log(this.moves.turn, mX, mY, this.moves.mX, this.moves.mY);
+      // 無は移動できない
+      if (this.moves.piece == "-") {
+        console.log("空マスは移動できません");
+        return false;
       }
-      if (piece.match(/[A-Z]/)) {
-        this.capture.white[piece.toUpperCase()] += 1;
+
+      if (this.moves.mX == mX && this.moves.mY == mY) {
+        console.log("同じ位置にコマを動かすことはできません");
+        return false;
       }
-      this.board[next_rank][next_file] = this.board[prev_rank][prev_file];
-      this.board[prev_rank][prev_file] = "-";
+
+      // 移動先が無であれば移動できる
+      if (this.board[mX][mY] == "-") {
+        console.log("移動先が空マスです");
+        return true;
+      }
+
+      // 移動先が相手のコマであれば移動できる
+      // console.log(this.moves.turn % 2, this.board[mX][mY].match(/[a-z]/));
+      if (this.moves.turn % 2) {
+        if (this.board[mX][mY].match(/[A-Z]/) != null) {
+          console.log("移動先が相手のコマです");
+          return true;
+        } else {
+          console.log("移動先が自分のコマです");
+          return false;
+        }
+      } else {
+        if (this.board[mX][mY].match(/[a-z]/) != null) {
+          console.log("移動先が相手のコマです");
+          return true;
+        } else {
+          console.log("移動先が自分のコマです");
+          return false;
+        }
+      }
     }
   },
   firestore() {

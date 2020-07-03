@@ -21,3 +21,9 @@ export default {
   })
 };
 </script>
+
+<style>
+body {
+  touch-action: manipulation;
+}
+</style>
