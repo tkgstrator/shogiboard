@@ -7,7 +7,7 @@
           v-for="(num, key) in capture.white"
           :key="key"
           @click="pickPiece(-1, -1, key, num)"
-        >{{ pieces[key] }}{{ num }}</p>
+        >{{ pieces[key.toUpperCase()] }}{{ num }}</p>
       </div>
     </div>
 
@@ -47,7 +47,7 @@ export default {
       board: [[], [], [], [], [], [], [], [], []],
       capture: {
         black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
-        white: { l: 0, n: 0, s: 0, h: 0, b: 0, r: 0, p: 0 }
+        white: { l: 0, n: 0, s: 0, g: 0, b: 0, r: 0, p: 0 }
       },
       pieces: {
         L: "香",
@@ -57,7 +57,13 @@ export default {
         K: "玉",
         B: "角",
         R: "飛",
-        P: "歩"
+        P: "歩",
+        "L+": "杏",
+        "N+": "圭",
+        "S+": "全",
+        "B+": "馬",
+        "R+": "龍",
+        "P+": "と"
       },
       row: {
         1: "a",
@@ -115,6 +121,22 @@ export default {
     }
   },
   methods: {
+    isPromoted(mX) {
+      // 先手のコマなら
+      if (this.moves.piece.match(/[A-Z]/)) {
+        if (mX <= 2 || this.moves.mX <= 2) {
+          return true;
+        }
+        return false;
+      }
+      // 後手のコマなら
+      if (this.moves.piece.match(/[a-z]/)) {
+        if (mX >= 6 || this.moves.mX >= 6) {
+          return true;
+        }
+        return false;
+      }
+    },
     // コマを選択する
     pickPiece(mX, mY, piece, num) {
       // 既にコマが選択されていた場合
@@ -124,34 +146,40 @@ export default {
           // 移動先が空マスでなければ手駒に加える
           if (piece != "-") {
             if (piece.match(/[a-z]/)) {
-              this.capture.black[piece.toUpperCase()] += 1;
+              this.capture.black[piece.toUpperCase().replace("+", "")] += 1;
             } else {
-              this.capture.white[piece.toLowerCase()] += 1;
+              this.capture.white[piece.toLowerCase().replace("+", "")] += 1;
             }
           }
-          // コマを置き換える
-          this.board[mX].splice(mY, 1, this.moves.piece);
           // 盤から動かしたのであれば盤のコマを消す
           if (this.moves.mX != -1 || this.moves.mY != -1) {
             this.board[this.moves.mX].splice(this.moves.mY, 1, "-");
+            // コマが金でも玉でも成っているコマでもない
+            if (
+              this.isPromoted(mX) &&
+              this.moves.piece.match(/[+GKgk]/) == null
+            ) {
+              this.board[mX].splice(mY, 1, this.moves.piece + "+");
+            } else {
+              this.board[mX].splice(mY, 1, this.moves.piece);
+            }
           } else {
             // そうでなければ手番の持ち駒を一つ減らす
             if (this.moves.piece.match(/[A-Z]/)) {
-              this.capture.black[this.moves.piece] -= 1;
+              this.capture.black[this.moves.piece.replace("+", "")] -= 1;
             } else {
-              this.capture.white[this.moves.piece] -= 1;
+              this.capture.white[this.moves.piece.replace("+", "")] -= 1;
             }
+            // コマを置き換える
+            this.board[mX].splice(mY, 1, this.moves.piece);
           }
           this.moves.turn += 1;
         }
-        console.log("選択状態を解除しました");
         this.moves.mX = null;
         this.moves.mY = null;
         this.moves.isPicked = false;
-        console.log("SUCCESS");
         return;
       }
-
       // まだコマが選択されていない場合
       if (!this.moves.isPicked) {
         // 手番と違うコマは選択できない
@@ -163,7 +191,6 @@ export default {
           console.log("あなたの手番ではありません");
           return;
         }
-        console.log("コマを選択しました");
         this.moves.mX = mX;
         this.moves.mY = mY;
         this.moves.piece = piece;
