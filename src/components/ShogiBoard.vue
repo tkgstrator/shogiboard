@@ -6,7 +6,7 @@
         <p
           v-for="(num, key) in capture.white"
           :key="key"
-          @click="pickPiece(key, num)"
+          @click="pickPiece(-1, -1, key, num)"
         >{{ pieces[key] }}{{ num }}</p>
       </div>
     </div>
@@ -27,7 +27,7 @@
         <p
           v-for="(num, key) in capture.black"
           :key="key"
-          @click="pickPiece(key, num)"
+          @click="pickPiece(-1, -1, key, num)"
         >{{ pieces[key] }}{{ num }}</p>
       </div>
     </div>
@@ -47,7 +47,7 @@ export default {
       board: [[], [], [], [], [], [], [], [], []],
       capture: {
         black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
-        white: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 }
+        white: { l: 0, n: 0, s: 0, h: 0, b: 0, r: 0, p: 0 }
       },
       pieces: {
         L: "香",
@@ -119,23 +119,36 @@ export default {
     pickPiece(mX, mY, piece, num) {
       // 既にコマが選択されていた場合
       if (this.moves.isPicked) {
-        let prev = this.board[this.moves.mX][this.moves.mY];
+        // 移動可能かどうかを判定する
         if (this.checkMovePiece(mX, mY)) {
-          console.log("SUCCESS");
-          this.board[mX].splice(mY, 1, prev);
-          this.board[this.moves.mX].splice(this.moves.mY, 1, "-");
+          // 移動先が空マスでなければ手駒に加える
+          if (piece != "-") {
+            if (piece.match(/[a-z]/)) {
+              this.capture.black[piece.toUpperCase()] += 1;
+            } else {
+              this.capture.white[piece.toLowerCase()] += 1;
+            }
+          }
+          // コマを置き換える
+          this.board[mX].splice(mY, 1, this.moves.piece);
+          // 盤から動かしたのであれば盤のコマを消す
+          if (this.moves.mX != -1 || this.moves.mY != -1) {
+            this.board[this.moves.mX].splice(this.moves.mY, 1, "-");
+          } else {
+            // そうでなければ手番の持ち駒を一つ減らす
+            if (this.moves.piece.match(/[A-Z]/)) {
+              this.capture.black[this.moves.piece] -= 1;
+            } else {
+              this.capture.white[this.moves.piece] -= 1;
+            }
+          }
           this.moves.turn += 1;
-          // this.board[this.moves.mX][this.moves.mY] = "-";
-          // this.board[mX][mY] = this.board[this.moves.mX][this.moves.mY];
-          // this.board[this.moves.mX][this.moves.mY] = "-";
-          // コマを動かします
-        } else {
-          console.log("ERROR");
         }
         console.log("選択状態を解除しました");
         this.moves.mX = null;
         this.moves.mY = null;
         this.moves.isPicked = false;
+        console.log("SUCCESS");
         return;
       }
 
@@ -153,6 +166,7 @@ export default {
         console.log("コマを選択しました");
         this.moves.mX = mX;
         this.moves.mY = mY;
+        this.moves.piece = piece;
         this.moves.isPicked = true;
         return;
       }
@@ -161,11 +175,19 @@ export default {
     // コマが移動可能かどうかを判定し、真理値を返す関数
     checkMovePiece(mX, mY) {
       console.log(this.moves.turn, mX, mY, this.moves.mX, this.moves.mY);
-      // 無は移動できない
-      if (this.moves.piece == "-") {
-        console.log("空マスは移動できません");
+      // 持ち駒を打つ場合
+      if (this.moves.mX == -1 && this.moves.mY == -1) {
+        if (this.board[mX][mY] == "-") {
+          return true;
+        }
         return false;
       }
+
+      // // 無は移動できない
+      // if (this.moves.piece == "-") {
+      //   console.log("空マスは移動できません");
+      //   return false;
+      // }
 
       if (this.moves.mX == mX && this.moves.mY == mY) {
         console.log("同じ位置にコマを動かすことはできません");
