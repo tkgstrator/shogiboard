@@ -1,12 +1,34 @@
 <template>
-  <div id="shogiboard">
-    <div v-for="(item, i) in board" :key="i" class="container">
-      <div v-for="(piece, j) in item" :key="j" class="edge">
+  <div class="shogiboard">
+    <div class="player">
+      <p>☖後手</p>
+      <div class="capture">
         <p
-          :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': 9 * i + j == move.prev, 'empty': piece.match(/[-]/)}"
-          @click="selectPiece(i, j, piece)"
-        >{{ piece.match(/[A-z]/) ? pieces[piece.toUpperCase()] : "-"}}</p>
-        <!-- <div>{{ piece }}</div> -->
+          v-for="(num, key) in capture.white"
+          :key="key"
+          @click="pickPiece(key, num)"
+        >{{ pieces[key] }}{{ num }}</p>
+      </div>
+    </div>
+
+    <div class="board">
+      <div v-for="(item, i) in board" :key="i" class="container">
+        <div v-for="(piece, j) in item" :key="j" class="edge">
+          <p
+            :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': 9 * i + j == move.prev, 'empty': piece.match(/[-]/)}"
+            @click="selectPiece(i, j, piece)"
+          >{{ piece.match(/[A-z]/) ? pieces[piece.toUpperCase()] : "-"}}</p>
+        </div>
+      </div>
+    </div>
+    <div class="player">
+      <p>☗先手</p>
+      <div class="capture">
+        <p
+          v-for="(num, key) in capture.black"
+          :key="key"
+          @click="pickPiece(key, num)"
+        >{{ pieces[key] }}{{ num }}</p>
       </div>
     </div>
   </div>
@@ -24,6 +46,10 @@ export default {
       position: String,
       moves: [],
       board: [[], [], [], [], [], [], [], [], []],
+      capture: {
+        black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
+        white: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 }
+      },
       pieces: {
         L: "香",
         N: "桂",
@@ -47,7 +73,8 @@ export default {
       },
       move: {
         prev: null,
-        next: null
+        next: null,
+        piece: null
       }
     };
   },
@@ -86,6 +113,17 @@ export default {
     }
   },
   methods: {
+    pickPiece(key, num) {
+      // コマがないところは選択できない（まあ非表示にしてもいいけど）
+      // if (num == 0) {
+      //   console.log("No pieces");
+      //   return;
+      // }
+      // 駒台からとってきたことを示す-1を代入
+      this.move.prev = -1;
+      this.move.piece = key;
+      console.log("Pick", key, num);
+    },
     selectPiece(i, j, piece) {
       // 一回目のクリック
       if (this.move.prev == null) {
@@ -98,8 +136,21 @@ export default {
           return;
         }
       }
-      // 二回目のクリック
+      // 駒台からとってきた場合
+      if (this.move.prev == -1) {
+        // 空のところになら駒を置ける
+        if (this.board[i][j] == "-") {
+          console.log("Set piece", this.move.piece);
+          this.move.prev = this.move.next = null;
+          this.board[i][j] = this.move.piece;
+          return;
+        } else {
+          console.log("Not empty");
+          return;
+        }
+      }
 
+      // 二回目のクリック
       this.move.next = 9 * i + j;
       // 同じところを二回クリックしたら選択解除
       if (this.move.prev == this.move.next) {
@@ -124,6 +175,15 @@ export default {
       let next_rank = parseInt(next / 9);
       let next_file = next - 9 * next_rank;
 
+      // 移動先にあった駒を持ち駒として追加する
+      let piece = this.board[next_rank][next_file];
+      // 移動先の駒が後手の駒なら先手の駒台に追加する
+      if (piece.match(/[a-z]/)) {
+        this.capture.black[piece.toUpperCase()] += 1;
+      }
+      if (piece.match(/[A-Z]/)) {
+        this.capture.white[piece.toUpperCase()] += 1;
+      }
       this.board[next_rank][next_file] = this.board[prev_rank][prev_file];
       this.board[prev_rank][prev_file] = "-";
     }
@@ -147,17 +207,35 @@ export default {
   user-select: none;
 }
 
-div {
-  min-width: 8vw;
-  max-height: 8vw;
-  min-height: 8vw;
+.shogiboard {
+  display: block;
+  margin: 0 auto;
+  font-family: "Sawarabi Mincho";
 }
 
-p {
-  font-size: 6.3vw;
-  font-family: "Sawarabi Mincho";
-  margin-bottom: 0px !important;
+.board {
+  display: block;
 }
+
+/* 盤の中に適応 */
+.board p {
+  font-size: 6.3vw;
+  /* margin-bottom: 0px !important; */
+}
+
+.player {
+  /* display: inline-flex;
+  justify-content: right; */
+  font-size: 4vw;
+  /* margin-bottom: 0px !important; */
+}
+
+.capture {
+  display: flex;
+  /* justify-content: center; */
+  padding: 0px !important;
+}
+
 .container {
   display: flex;
   justify-content: center;
@@ -195,5 +273,10 @@ p {
 .edge {
   border: 1px solid black;
   background-color: #ffc107;
+  width: 8vw;
+  height: 8vw;
+  /* min-width: 8vw;
+  max-height: 8vw;
+  min-height: 8vw; */
 }
 </style>

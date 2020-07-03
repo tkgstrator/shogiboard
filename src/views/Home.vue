@@ -1,7 +1,5 @@
 <template>
-  <div class="home">
-    <ShogiBoard />
-  </div>
+  <ShogiBoard />
 </template>
 
 <script>

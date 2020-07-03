@@ -1,9 +1,9 @@
 <template>
-  <v-app>
-    <v-main>
-      <ShogiBoard />
-    </v-main>
-  </v-app>
+  <!-- <v-app> -->
+  <!-- <v-main> -->
+  <ShogiBoard />
+  <!-- </v-main> -->
+  <!-- </v-app> -->
 </template>
 
 <script>
