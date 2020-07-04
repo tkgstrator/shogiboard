@@ -3,20 +3,17 @@
     <div class="player">
       <p>☖後手</p>
       <div class="capture">
-        <p
-          v-for="(num, key) in capture.white"
-          :key="key"
-          @click="pickPiece(-1, -1, key, num)"
-        >{{ pieces[key.toUpperCase()] }}{{ num }}</p>
+        <p v-for="(num, key) in capture.white" :key="key" @click="pickPiece(-1, -1, key, true)">
+          <template v-if="num != 0">{{ pieces[key] }}{{ num }}</template>
+        </p>
       </div>
     </div>
-
     <div class="board">
       <div v-for="(item, i) in board" :key="i" class="container">
         <div v-for="(piece, j) in item" :key="j" class="edge">
           <p
             :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': (i == moves.mX) && (j == moves.mY), 'empty': piece.match(/[-]/)}"
-            @click="pickPiece(i, j, piece, 1)"
+            @click="pickPiece(i, j, piece, false)"
           >{{ piece.match(/[A-z]/) ? pieces[piece.toUpperCase()] : "-"}}</p>
         </div>
       </div>
@@ -24,11 +21,13 @@
     <div class="player">
       <p>☗先手</p>
       <div class="capture">
-        <p
-          v-for="(num, key) in capture.black"
-          :key="key"
-          @click="pickPiece(-1, -1, key, num)"
-        >{{ pieces[key] }}{{ num }}</p>
+        <p v-for="(num, key) in capture.black" :key="key" @click="pickPiece(-1, -1, key, true)">
+          <template
+            v-if="num != 0"
+            :class="{'isSelect': (-1 == moves.mX) && (moves.turn % 2 ==0) && (moves.mPiece == key)}"
+          >{{ pieces[key] }}</template>
+          <template v-if="num != 0">{{ num }}</template>
+        </p>
       </div>
     </div>
   </div>
@@ -80,9 +79,10 @@ export default {
         turn: 0,
         sfen: [],
         isPicked: false,
+        isCaptured: false,
         mX: null,
         mY: null,
-        piece: null
+        mPiece: null
       }
     };
   },
@@ -121,128 +121,159 @@ export default {
     }
   },
   methods: {
-    isPromoted(mX) {
+    // コマを成る関数（だいたい完成している）
+    isPromoted(mX, nX, nPiece) {
+      // 既に成っているコマもしくは金か玉なら
+      if (nPiece.match(/[+GKgk]/) != null) {
+        return false;
+      }
       // 先手のコマなら
-      if (this.moves.piece.match(/[A-Z]/)) {
-        if (mX <= 2 || this.moves.mX <= 2) {
+      if (nPiece.match(/[A-Z]/)) {
+        if (mX <= 2 || nX <= 2) {
           return true;
         }
         return false;
       }
       // 後手のコマなら
-      if (this.moves.piece.match(/[a-z]/)) {
-        if (mX >= 6 || this.moves.mX >= 6) {
+      if (nPiece.match(/[a-z]/)) {
+        if (mX >= 6 || nX >= 6) {
           return true;
         }
         return false;
       }
     },
-    // コマを選択する
-    pickPiece(mX, mY, piece, num) {
-      // 既にコマが選択されていた場合
-      if (this.moves.isPicked) {
-        // 移動可能かどうかを判定する
-        if (this.checkMovePiece(mX, mY)) {
-          // 移動先が空マスでなければ手駒に加える
-          if (piece != "-") {
-            if (piece.match(/[a-z]/)) {
-              this.capture.black[piece.toUpperCase().replace("+", "")] += 1;
-            } else {
-              this.capture.white[piece.toLowerCase().replace("+", "")] += 1;
-            }
-          }
-          // 盤から動かしたのであれば盤のコマを消す
-          if (this.moves.mX != -1 || this.moves.mY != -1) {
-            this.board[this.moves.mX].splice(this.moves.mY, 1, "-");
-            // コマが金でも玉でも成っているコマでもない
-            if (
-              this.isPromoted(mX) &&
-              this.moves.piece.match(/[+GKgk]/) == null
-            ) {
-              this.board[mX].splice(mY, 1, this.moves.piece + "+");
-            } else {
-              this.board[mX].splice(mY, 1, this.moves.piece);
-            }
-          } else {
-            // そうでなければ手番の持ち駒を一つ減らす
-            if (this.moves.piece.match(/[A-Z]/)) {
-              this.capture.black[this.moves.piece.replace("+", "")] -= 1;
-            } else {
-              this.capture.white[this.moves.piece.replace("+", "")] -= 1;
-            }
-            // コマを置き換える
-            this.board[mX].splice(mY, 1, this.moves.piece);
-          }
-          this.moves.turn += 1;
+    selectPiece(mX, mY, mPiece, isCaptured) {
+      // 空マスは選択できない
+      if (mPiece == "-") {
+        return;
+      }
+      // 手番と違うコマは選択できない
+      if (this.moves.turn % 2 == 0 && mPiece.match(/[A-Z]/) == null) {
+        return;
+      }
+      if (this.moves.turn % 2 == 1 && mPiece.match(/[a-z]/) == null) {
+        return;
+      }
+      this.moves.mX = mX;
+      this.moves.mY = mY;
+      this.moves.mPiece = mPiece;
+      this.moves.isPicked = true;
+      this.moves.isCaptured = isCaptured;
+      return;
+    },
+    movePiece(mX, mY, nX, nY, mPiece, nPiece) {
+      // 移動先が空マスでなければ手駒に加える
+      if (mPiece != "-") {
+        if (mPiece.match(/[a-z]/)) {
+          this.capture.black[mPiece.toUpperCase().replace("+", "")] += 1;
+        } else {
+          this.capture.white[mPiece.toLowerCase().replace("+", "")] += 1;
         }
+      }
+
+      // 盤から動かした場合、成り判定を加える
+      if (!this.moves.isCaptured) {
+        this.board[nX].splice(nY, 1, "-");
+        // 成り判定を加える
+        if (this.isPromoted(mX, nX, nPiece)) {
+          console.log("PROMOTION");
+          this.board[mX].splice(mY, 1, nPiece + "+");
+        } else {
+          this.board[mX].splice(mY, 1, nPiece);
+        }
+      }
+
+      // 駒台から打った場合、駒台から一枚減らす
+      if (this.moves.isCaptured) {
+        // 手番の持ち駒を一つ減らす
+        if (nPiece.match(/[A-Z]/)) {
+          this.capture.black[nPiece.replace("+", "")] -= 1;
+        } else {
+          this.capture.white[nPiece.replace("+", "")] -= 1;
+        }
+        // 打ったコマを盤におく
+        this.board[mX].splice(mY, 1, nPiece);
+      }
+      // 手番を一つ増やす
+      this.moves.turn += 1;
+
+      // コマの選択を解除する
+      this.moves.mX = null;
+      this.moves.mY = null;
+      this.moves.isPicked = false;
+
+      // 結果を出力する
+      console.log(
+        "MOVE",
+        this.moves.turn,
+        nPiece,
+        "=>",
+        mPiece,
+        "PROMOTION",
+        this.isPromoted(mX, nX, nPiece)
+      );
+      console.log(this.board);
+    },
+    // コマを選択する
+    pickPiece(mX, mY, mPiece, isCaptured) {
+      // コマを選択した状態なら
+      if (this.moves.isPicked) {
+        // 前状態を読み込む
+        let nX = this.moves.mX;
+        let nY = this.moves.mY;
+        let nPiece = this.moves.mPiece;
+        // コマが動かせるなら
+        if (this.isMovable(mX, mY, nX, nY, isCaptured)) {
+          this.movePiece(mX, mY, nX, nY, mPiece, nPiece, isCaptured);
+          return;
+        }
+        // コマが動かせないならそのコマを選択する
+        return;
+      }
+      // そのコマを選択する
+      if (!this.moves.isPicked) {
+        this.selectPiece(mX, mY, mPiece, isCaptured);
+        return;
+      }
+    },
+    // コマが移動可能かどうかを判定し、真理値を返す関数
+    isMovable(mX, mY, nX, nY) {
+      // 持ち駒を打つ場合、移動先が空マスなら移動可能
+      if (this.moves.isCaptured) {
+        try {
+          if (this.board[mX][mY] == "-") {
+            return true;
+          }
+        } catch (error) {
+          return false;
+        }
+        return false;
+      }
+
+      // 同じ位置を選んだら選択を解除する
+      if (mX == nX && mY == nY) {
         this.moves.mX = null;
         this.moves.mY = null;
         this.moves.isPicked = false;
-        return;
-      }
-      // まだコマが選択されていない場合
-      if (!this.moves.isPicked) {
-        // 手番と違うコマは選択できない
-        if (this.moves.turn % 2 == 0 && piece.match(/[A-Z]/) == null) {
-          console.log("あなたの手番ではありません");
-          return;
-        }
-        if (this.moves.turn % 2 == 1 && piece.match(/[a-z]/) == null) {
-          console.log("あなたの手番ではありません");
-          return;
-        }
-        this.moves.mX = mX;
-        this.moves.mY = mY;
-        this.moves.piece = piece;
-        this.moves.isPicked = true;
-        return;
-      }
-      console.log(num);
-    },
-    // コマが移動可能かどうかを判定し、真理値を返す関数
-    checkMovePiece(mX, mY) {
-      console.log(this.moves.turn, mX, mY, this.moves.mX, this.moves.mY);
-      // 持ち駒を打つ場合
-      if (this.moves.mX == -1 && this.moves.mY == -1) {
-        if (this.board[mX][mY] == "-") {
-          return true;
-        }
-        return false;
-      }
-
-      // // 無は移動できない
-      // if (this.moves.piece == "-") {
-      //   console.log("空マスは移動できません");
-      //   return false;
-      // }
-
-      if (this.moves.mX == mX && this.moves.mY == mY) {
-        console.log("同じ位置にコマを動かすことはできません");
         return false;
       }
 
       // 移動先が無であれば移動できる
       if (this.board[mX][mY] == "-") {
-        console.log("移動先が空マスです");
         return true;
       }
 
       // 移動先が相手のコマであれば移動できる
-      // console.log(this.moves.turn % 2, this.board[mX][mY].match(/[a-z]/));
       if (this.moves.turn % 2) {
         if (this.board[mX][mY].match(/[A-Z]/) != null) {
-          console.log("移動先が相手のコマです");
           return true;
         } else {
-          console.log("移動先が自分のコマです");
           return false;
         }
       } else {
         if (this.board[mX][mY].match(/[a-z]/) != null) {
-          console.log("移動先が相手のコマです");
           return true;
         } else {
-          console.log("移動先が自分のコマです");
           return false;
         }
       }
