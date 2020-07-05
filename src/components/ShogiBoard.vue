@@ -4,7 +4,7 @@
       <p>☖後手</p>
       <div class="capture">
         <p v-for="(num, key) in capture.white" :key="key" @click="pickPiece(-1, -1, key, true)">
-          <template v-if="num != 0">{{ pieces[key] }}{{ num }}</template>
+          <template v-if="num != 0">{{ pieces[key.toUpperCase()] }}{{ num }}</template>
         </p>
       </div>
     </div>
@@ -64,7 +64,7 @@ export default {
         "R+": "龍",
         "P+": "と"
       },
-      row: {
+      rank: {
         1: "a",
         2: "b",
         3: "c",
@@ -162,6 +162,9 @@ export default {
       return;
     },
     movePiece(mX, mY, nX, nY, mPiece, nPiece) {
+      // USI形式の指し手表示
+      var usi_move = "";
+
       // 移動先が空マスでなければ手駒に加える
       if (mPiece != "-") {
         if (mPiece.match(/[a-z]/)) {
@@ -173,10 +176,12 @@ export default {
 
       // 盤から動かした場合、成り判定を加える
       if (!this.moves.isCaptured) {
+        usi_move = 9 - nY + this.rank[nX + 1] + (9 - mY) + this.rank[mX + 1];
+        // 移動元を空マスにする
         this.board[nX].splice(nY, 1, "-");
-        // 成り判定を加える
+        // 成り判定を加えてコマを置く
         if (this.isPromoted(mX, nX, nPiece)) {
-          console.log("PROMOTION");
+          usi_move += "+";
           this.board[mX].splice(mY, 1, nPiece + "+");
         } else {
           this.board[mX].splice(mY, 1, nPiece);
@@ -185,6 +190,7 @@ export default {
 
       // 駒台から打った場合、駒台から一枚減らす
       if (this.moves.isCaptured) {
+        usi_move = nPiece.toUpperCase() + "*" + (9 - mY) + this.rank[mX + 1];
         // 手番の持ち駒を一つ減らす
         if (nPiece.match(/[A-Z]/)) {
           this.capture.black[nPiece.replace("+", "")] -= 1;
@@ -203,16 +209,8 @@ export default {
       this.moves.isPicked = false;
 
       // 結果を出力する
-      console.log(
-        "MOVE",
-        this.moves.turn,
-        nPiece,
-        "=>",
-        mPiece,
-        "PROMOTION",
-        this.isPromoted(mX, nX, nPiece)
-      );
-      console.log(this.board);
+      console.log(this.moves.turn, usi_move);
+      // console.log(this.board);
     },
     // コマを選択する
     pickPiece(mX, mY, mPiece, isCaptured) {
@@ -223,7 +221,7 @@ export default {
         let nY = this.moves.mY;
         let nPiece = this.moves.mPiece;
         // コマが動かせるなら
-        if (this.isMovable(mX, mY, nX, nY, isCaptured)) {
+        if (this.isMovable(mX, mY, nX, nY, nPiece)) {
           this.movePiece(mX, mY, nX, nY, mPiece, nPiece, isCaptured);
           return;
         }
@@ -236,12 +234,332 @@ export default {
         return;
       }
     },
+    checkBitBoard(mX, mY, nX, nY, nPiece) {
+      // コマによる移動の制約チェック
+      if (nPiece.match(/[A-Z]/)) {
+        switch (nPiece.toUpperCase()) {
+          case "L":
+            if (Math.abs(mY - nY) == 0 && mX < nX) {
+              for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                if (this.board[i][mY] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            break;
+          case "N":
+            if (Math.abs(mY - nY) == 1 && mX - nX == -2) {
+              return true;
+            }
+            break;
+          case "S":
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              // 真下には動けない
+              if (Math.abs(mY - nY) == 0 && mX - nX == 1) {
+                return false;
+              }
+              // 真横には動けない
+              if (Math.abs(mY - nY) == 1 && Math.abs(mX - nX) == 0) {
+                return false;
+              }
+              return true;
+            }
+            break;
+          case "G":
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              // 斜め後ろに動いたかどうかをチェック
+              if (Math.abs(mY - nY) == 1 && mX - nX == 1) {
+                return false;
+              }
+              return true;
+            }
+            break;
+          case "K":
+            // 隣接一マス以内なら動ける（もっと簡単にかけそう
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              return true;
+            }
+            break;
+          case "B":
+            if (Math.abs(mX - nX) == Math.abs(mY - nY)) {
+              // 右上または左下に移動している
+              if (
+                (Math.min(mX, nX) == mX && Math.min(mY, nY) == nY) ||
+                (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
+              ) {
+                for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                  if (this.board[i][mX + mY - i] != "-") {
+                    return false;
+                  }
+                }
+              } else {
+                // 左上または右下に移動している
+                for (let i = 1; i < Math.abs(mX - nX); i++) {
+                  if (
+                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
+                    "-"
+                  ) {
+                    return false;
+                  }
+                }
+              }
+              return true;
+            }
+            break;
+          case "R":
+            if (Math.abs(mY - nY) == 0) {
+              for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                if (this.board[i][mY] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            if (Math.abs(mX - nX) == 0) {
+              for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
+                if (this.board[mX][i] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            break;
+          case "P":
+            if (nX == mX + 1 && mY == nY) {
+              return true;
+            }
+            break;
+          case "B+":
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              return true;
+            }
+            // 相対ズレが等しければ角が動ける範囲である
+            if (Math.abs(mX - nX) == Math.abs(mY - nY)) {
+              // 右上または左下に移動している
+              if (
+                (Math.min(mX, nX) == mX && Math.min(mY, nY) == nY) ||
+                (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
+              ) {
+                for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                  if (this.board[i][mX + mY - i] != "-") {
+                    return false;
+                  }
+                }
+              } else {
+                // 左上または右下に移動している
+                for (let i = 1; i < Math.abs(mX - nX); i++) {
+                  if (
+                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
+                    "-"
+                  ) {
+                    return false;
+                  }
+                }
+              }
+              return true;
+            }
+            break;
+          case "R+":
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              return true;
+            }
+            if (Math.abs(mY - nY) == 0) {
+              for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                if (this.board[i][mY] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            if (Math.abs(mX - nX) == 0) {
+              for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
+                if (this.board[mX][i] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            break;
+          default:
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              // 斜め後ろに動いたかどうかをチェック
+              if (Math.abs(mY - nY) == 1 && mX - nX == 1) {
+                return false;
+              }
+              return true;
+            }
+            break;
+        }
+        return false;
+      }
+      if (nPiece.match(/[a-z]/)) {
+        switch (nPiece.toUpperCase()) {
+          case "L":
+            if (Math.abs(mY - nY) == 0 && mX > nX) {
+              for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                if (this.board[i][mY] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            break;
+          case "N":
+            if (Math.abs(mY - nY) == 1 && mX - nX == 2) {
+              return true;
+            }
+            break;
+          case "S":
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              // 真下には動けない
+              if (Math.abs(mY - nY) == 0 && mX - nX == -1) {
+                return false;
+              }
+              // 真横には動けない
+              if (Math.abs(mY - nY) == 1 && Math.abs(mX - nX) == 0) {
+                return false;
+              }
+              return true;
+            }
+            break;
+          case "G":
+            // まずは玉の動きを指定
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              // 斜め後ろに動いたかどうかをチェック
+              if (Math.abs(mY - nY) == 1 && mX - nX == -1) {
+                return false;
+              }
+              return true;
+            }
+            break;
+          case "K":
+            // 隣接一マス以内なら動ける（もっと簡単にかけそう
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              return true;
+            }
+            break;
+          case "B":
+            if (Math.abs(mX - nX) == Math.abs(mY - nY)) {
+              // 右上または左下に移動している
+              if (
+                (Math.min(mX, nX) == mX && Math.min(mY, nY) == nY) ||
+                (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
+              ) {
+                for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                  if (this.board[i][mX + mY - i] != "-") {
+                    return false;
+                  }
+                }
+              } else {
+                // 左上または右下に移動している
+                for (let i = 1; i < Math.abs(mX - nX); i++) {
+                  if (
+                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
+                    "-"
+                  ) {
+                    return false;
+                  }
+                }
+              }
+              return true;
+            }
+            break;
+          case "R":
+            if (Math.abs(mY - nY) == 0) {
+              for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                if (this.board[i][mY] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            if (Math.abs(mX - nX) == 0) {
+              for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
+                if (this.board[mX][i] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            break;
+          case "P":
+            if (nX == mX - 1 && mY == nY) {
+              return true;
+            }
+            break;
+          case "B+":
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              return true;
+            }
+            if (Math.abs(mX - nX) == Math.abs(mY - nY)) {
+              // 右上または左下に移動している
+              if (
+                (Math.min(mX, nX) == mX && Math.min(mY, nY) == nY) ||
+                (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
+              ) {
+                for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                  if (this.board[i][mX + mY - i] != "-") {
+                    return false;
+                  }
+                }
+              } else {
+                // 左上または右下に移動している
+                for (let i = 1; i < Math.abs(mX - nX); i++) {
+                  if (
+                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
+                    "-"
+                  ) {
+                    return false;
+                  }
+                }
+              }
+              return true;
+            }
+            break;
+          case "R+":
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              return true;
+            }
+            if (Math.abs(mY - nY) == 0) {
+              for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
+                if (this.board[i][mY] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            if (Math.abs(mX - nX) == 0) {
+              for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
+                if (this.board[mX][i] != "-") {
+                  return false;
+                }
+              }
+              return true;
+            }
+            break;
+          default:
+            // まずは玉の動きを指定
+            if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
+              // 斜め後ろに動いたかどうかをチェック
+              if (Math.abs(mY - nY) == 1 && mX - nX == -1) {
+                return false;
+              }
+              return true;
+            }
+            break;
+        }
+        return false;
+      }
+    },
     // コマが移動可能かどうかを判定し、真理値を返す関数
-    isMovable(mX, mY, nX, nY) {
+    isMovable(mX, mY, nX, nY, nPiece) {
       // 持ち駒を打つ場合、移動先が空マスなら移動可能
       if (this.moves.isCaptured) {
         try {
           if (this.board[mX][mY] == "-") {
+            this.moves.mX = nX;
+            this.moves.mY = nY;
             return true;
           }
         } catch (error) {
@@ -258,7 +576,12 @@ export default {
         return false;
       }
 
-      // 移動先が無であれば移動できる
+      // 動き上コマが移動できない場所だったら
+      if (!this.checkBitBoard(mX, mY, nX, nY, nPiece)) {
+        return false;
+      }
+
+      // 移動先が空マスであれば移動できる
       if (this.board[mX][mY] == "-") {
         return true;
       }
