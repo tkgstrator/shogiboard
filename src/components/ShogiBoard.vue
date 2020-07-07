@@ -83,7 +83,7 @@ export default {
         R: "飛",
         P: "歩",
         "+L": "杏",
-        "+N+": "圭",
+        "+N": "圭",
         "+S": "全",
         "+B": "馬",
         "+R": "龍",
@@ -171,7 +171,8 @@ export default {
       var sfenboard = "";
       Array.prototype.forEach.call(sfen, function(value) {
         sfenboard += value;
-        if (!(sfenboard.replace(/[+/]/g, "").length % 9)) sfenboard += "/";
+        if (!(sfenboard.replace(/[+/]/g).length % 9))
+          if (value != "+") sfenboard += "/";
       });
       sfenboard = sfenboard
         .replace(/---------/g, "9")
@@ -499,7 +500,7 @@ export default {
               return true;
             }
             break;
-          case "B+":
+          case "+B":
             if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
               return true;
             }
@@ -529,7 +530,7 @@ export default {
               return true;
             }
             break;
-          case "R+":
+          case "+R":
             if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
               return true;
             }
@@ -657,7 +658,7 @@ export default {
               return true;
             }
             break;
-          case "B+":
+          case "+B":
             if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
               return true;
             }
@@ -686,7 +687,7 @@ export default {
               return true;
             }
             break;
-          case "R+":
+          case "+R":
             if (Math.abs(mX - nX) <= 1 && Math.abs(mY - nY) <= 1) {
               return true;
             }
