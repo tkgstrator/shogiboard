@@ -25,26 +25,26 @@
     <div class="player">
       <p>☗先手</p>
       <div class="capture">
-        <p
+        <div
           v-for="(num, key) in capture.black"
           :key="key"
           @click="pickPiece({mX:-1, mY:-1, mPiece:key}, true)"
         >
-          <template
-            v-if="num != 0"
-            :class="{'isSelect': (-1 == moves.mX) && (moves.turn % 2 ==0) && (moves.mPiece == key)}"
-          >{{ pieces[key] }}</template>
-          <template v-if="num != 0">{{ num }}</template>
-        </p>
+          <template v-if="num!=0">
+            <p
+              :class="{'isSelect': moves.prev.mPiece == key && moves.prev.mX == -1}"
+            >{{ pieces[key] }}{{ num }}</p>
+          </template>
+        </div>
       </div>
     </div>
     <div class="control">
       <ul class="center-block">
         <li>
-          <v-icon size="6.0vw" color="#67c5ff">mdi-skip-backward-outline</v-icon>
+          <v-icon size="6.0vw" color="#67c5ff" @click="popPosition(0)">mdi-skip-backward-outline</v-icon>
         </li>
         <li>
-          <v-icon size="6.0vw" color="#67c5ff" @click="popLast()">mdi-menu-left-outline</v-icon>
+          <v-icon size="6.0vw" color="#67c5ff" @click="popPosition(-1)">mdi-menu-left-outline</v-icon>
         </li>
         <li>
           <v-icon size="6.0vw" color="#67c5ff" @click="getPosition(1, true)">mdi-menu-right-outline</v-icon>
@@ -68,7 +68,6 @@ export default {
       startpos: "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL",
       position: [],
       board: [[], [], [], [], [], [], [], [], []],
-      shogiboard: [[], [], [], [], [], [], [], [], []], // 表示用のやつ
       capture: {
         black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
         white: { l: 0, n: 0, s: 0, g: 0, b: 0, r: 0, p: 0 }
@@ -128,8 +127,9 @@ export default {
       // immediateをtrueにするとこの関数内ではdocumentを呼び出せない
       immediate: false,
       handler() {
-        // 指し手が0ではなかったら最後の局面を出力する
+        // データベースから局面情報をとってくる
         this.position = this.document["position"];
+        // console.log("POSITION", this.position);
         if (this.document["position"].length == 0) {
           db.collection("KIF")
             .doc("SFEN")
@@ -139,9 +139,32 @@ export default {
               ]
             });
         }
-        let sfenboard = this.position.pop();
+        let sfenboard = this.position.slice(-1)[0];
         let sfen = sfenboard.split(/[/\s]/);
         this.moves.turn = parseInt(sfen.slice(11, 12).toString());
+
+        // 持ち駒情報をとってくる
+        let capture = sfen
+          .slice(10, 11)
+          .toString()
+          .match(/[1-9]*[A-z]/g);
+
+        if (capture != null) {
+          Array.prototype.forEach.call(
+            capture,
+            function(value) {
+              let piece = value.match(/[A-z]/).toString();
+              let num =
+                value.match(/[1-9]/) == null
+                  ? 1
+                  : parseInt(value.match(/[1-9]/).toString());
+              console.log(value, piece, num);
+              if (piece.match(/[a-z]/)) this.white[piece] = num;
+              if (piece.match(/[A-Z]/)) this.black[piece] = num;
+            },
+            this.capture
+          );
+        }
 
         var board = [[], [], [], [], [], [], [], [], []];
         sfen.slice(0, 9).forEach(function(value, index) {
@@ -200,8 +223,9 @@ export default {
         (pieces === "" ? "- " : pieces + " ") + this.moves.turn.toString();
       return sfenboard;
     },
-    popLast() {
-      let position = this.position.slice(0, this.position.length);
+    popPosition(turn) {
+      console.log("POSITION(POP)", this.position);
+      let position = this.position.slice(0, turn);
       db.collection("KIF")
         .doc("SFEN")
         .update({
@@ -294,11 +318,13 @@ export default {
       if (this.moves.turn % 2 == 1 && current.mPiece.match(/[a-z]/) == null) {
         return;
       }
+      // console.log(current);
       this.moves.isPicked = true;
       this.moves.prev.mX = current.mX;
       this.moves.prev.mY = current.mY;
       this.moves.prev.mPiece = current.mPiece;
       this.moves.prev.isCaptured = isCaptured;
+      // console.log(this.moves);
       return;
     },
     movePiece(prev, next, isPlayer = true) {
@@ -394,7 +420,7 @@ export default {
       }
       // そのコマを選択する
       if (!this.moves.isPicked) {
-        // console.log("コマを選択しました");
+        // console.log(current);
         this.selectPiece(current, isCaptured);
         return;
       }
@@ -725,20 +751,20 @@ export default {
     // コマが移動可能かどうかを判定し、真理値を返す関数
     isMovable(prev, next) {
       // console.log("isMovable", prev, next, prev.isCaptured);
+      // 同じ位置を選んだら選択を解除する
+      if (prev.mX == next.mX && prev.mY == next.mY) {
+        this.moves.prev.mX = null;
+        this.moves.prev.mY = null;
+        this.moves.isPicked = false;
+        return false;
+      }
+
       // 持ち駒を打つ場合、移動先が空マスなら移動可能
       if (prev.isCaptured) {
         // console.log("持ち駒を打ちます");
         if (this.board[next.mX][next.mY] == "-") {
           return true;
         }
-        return false;
-      }
-
-      // 同じ位置を選んだら選択を解除する
-      if (prev.mX == next.mX && prev.mY == next.mY) {
-        this.moves.prev.mX = null;
-        this.moves.prev.mY = null;
-        this.moves.isPicked = false;
         return false;
       }
 
@@ -787,9 +813,15 @@ export default {
   user-select: none;
 }
 
+.container {
+  display: flex;
+  justify-content: center;
+  padding: 0px !important;
+}
+
 .shogiboard {
-  /* display: block; */
-  /* margin: 0 auto; */
+  display: block;
+  margin: 0 auto;
   text-align: center;
   font-family: "Sawarabi Mincho";
 }
@@ -801,87 +833,13 @@ export default {
   border: solid 2px #000000;
 }
 
-/* 盤の中に適応 */
-.board p {
-  font-size: 6.3vw;
-  /* margin-bottom: 0px !important; */
-}
-
-.player {
-  display: flex;
-  justify-content: center;
-  font-size: 4.5vw;
-  /* text-align: center; */
-  margin-bottom: 0px !important;
-}
-
-.capture {
-  display: inline-flex;
-  /* justify-content: right; */
-  padding-left: 2vw !important;
-}
-
-.container {
-  display: flex;
-  justify-content: center;
-  padding: 0px !important;
-}
-
-.blackP {
-  display: block;
-  line-height: 8vw;
-  text-align: center;
-}
-
 .empty {
   color: transparent;
-}
-
-.whiteP {
-  display: block;
-  line-height: 8vw;
-  /* margin: auto; */
-  text-align: center;
-  transform: rotate(180deg);
 }
 
 .isSelect:not(.empty) {
   color: white;
   background-color: black;
-}
-
-/* .isSelect.empty {
-  color: transparent;
-  background-color: black;
-} */
-
-.edge {
-  border: 1px solid black;
-  background-color: #ffc107;
-  width: 8vw;
-  height: 8vw;
-  /* min-width: 8vw;
-  max-height: 8vw;
-  min-height: 8vw; */
-}
-
-.center-block {
-  padding: 0 auto;
-  text-align: center;
-}
-
-.v-icon {
-  list-style: none;
-  padding: 0.3em 1em;
-  text-decoration: none;
-  color: #67c5ff;
-  border: solid 3px #67c5ff;
-  border-radius: 3px;
-  transition: 0.4s;
-  cursor: pointer;
-  -ms-user-select: none;
-  -webkit-user-select: none;
-  user-select: none;
 }
 
 .v-icon:hover {
@@ -890,5 +848,130 @@ export default {
 
 li {
   display: inline-block;
+  padding: 3px;
+}
+
+@media (max-width: 800px) {
+  .board p {
+    font-size: 6vw;
+    /* margin-bottom: 0px !important; */
+  }
+
+  .player {
+    display: flex;
+    justify-content: center;
+    font-size: 4.5vw;
+    /* text-align: center; */
+    margin-bottom: 0px !important;
+  }
+  .capture {
+    display: inline-flex;
+    /* justify-content: right; */
+    padding-left: 2vw !important;
+  }
+
+  .blackP {
+    display: block;
+    line-height: 8vw;
+    text-align: center;
+  }
+
+  .whiteP {
+    display: block;
+    line-height: 8vw;
+    /* margin: auto; */
+    text-align: center;
+    transform: rotate(180deg);
+  }
+
+  .center-block {
+    padding: 0 auto;
+    text-align: center;
+  }
+
+  .edge {
+    border: 1px solid black;
+    background-color: #ffc107;
+    width: 8vw;
+    height: 8vw;
+    /* min-width: 8vw;
+  max-height: 8vw;
+  min-height: 8vw; */
+  }
+
+  .v-icon {
+    list-style: none;
+    padding: 2vw 5vw;
+    text-decoration: none;
+    color: #67c5ff;
+    border: solid 3px #67c5ff;
+    border-radius: 3px;
+    /* transition: 0.4s; */
+    cursor: pointer;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+@media (min-width: 800px) {
+  .board p {
+    font-size: 48px;
+    /* margin-bottom: 0px !important; */
+  }
+
+  .player {
+    display: flex;
+    justify-content: center;
+    font-size: 36px;
+    /* text-align: center; */
+    margin-bottom: 0px !important;
+  }
+  .capture {
+    display: inline-flex;
+    /* justify-content: right; */
+    padding-left: 12px !important;
+  }
+
+  .blackP {
+    display: block;
+    line-height: 64px;
+    text-align: center;
+  }
+
+  .whiteP {
+    display: block;
+    line-height: 64px;
+    /* margin: auto; */
+    text-align: center;
+    transform: rotate(180deg);
+  }
+
+  .center-block {
+    padding: 0 auto;
+    text-align: center;
+  }
+
+  .edge {
+    border: 1px solid black;
+    background-color: #ffc107;
+    width: 64px;
+    height: 64px;
+  }
+
+  .v-icon {
+    list-style: none;
+    padding: 16px 40px;
+    font-size: 48px !important;
+    text-decoration: none;
+    color: #67c5ff;
+    border: solid 3px #67c5ff;
+    border-radius: 3px;
+    /* transition: 0.4s; */
+    cursor: pointer;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
 </style>
