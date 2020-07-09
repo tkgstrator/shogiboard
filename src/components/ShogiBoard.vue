@@ -3,13 +3,17 @@
     <div class="player">
       <p>☖後手</p>
       <div class="capture">
-        <p
+        <div
           v-for="(num, key) in capture.white"
           :key="key"
           @click="pickPiece({mX:-1, mY:-1, mPiece:key}, true)"
         >
-          <template v-if="num != 0">{{ pieces[key.toUpperCase()] }}{{ num }}</template>
-        </p>
+          <template v-if="num!=0">
+            <p
+              :class="{'isSelect': moves.prev.mPiece == key && moves.prev.mX == -1}"
+            >{{ pieces[key.toUpperCase()] }}{{ num }}</p>
+          </template>
+        </div>
       </div>
     </div>
     <div class="board">
@@ -41,17 +45,17 @@
     <div class="control">
       <ul class="center-block">
         <li>
-          <v-icon size="6.0vw" color="#67c5ff" @click="popPosition(0)">mdi-skip-backward-outline</v-icon>
+          <v-icon size="6.0vw" color="#67c5ff" @click="popPosition(1)">mdi-skip-backward-outline</v-icon>
         </li>
         <li>
           <v-icon size="6.0vw" color="#67c5ff" @click="popPosition(-1)">mdi-menu-left-outline</v-icon>
         </li>
-        <li>
+        <!-- <li>
           <v-icon size="6.0vw" color="#67c5ff" @click="getPosition(1, true)">mdi-menu-right-outline</v-icon>
         </li>
         <li>
           <v-icon size="6.0vw" color="#67c5ff">mdi-skip-forward-outline</v-icon>
-        </li>
+        </li>-->
       </ul>
     </div>
   </div>
@@ -65,7 +69,6 @@ export default {
   data() {
     return {
       document: [],
-      startpos: "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL",
       position: [],
       board: [[], [], [], [], [], [], [], [], []],
       capture: {
@@ -102,6 +105,7 @@ export default {
       moves: {
         turn: 0,
         isPicked: false,
+        usi: [],
         prev: {
           mX: null,
           mY: null,
@@ -129,20 +133,14 @@ export default {
       handler() {
         // データベースから局面情報をとってくる
         this.position = this.document["position"];
-        // console.log("POSITION", this.position);
-        if (this.document["position"].length == 0) {
-          db.collection("KIF")
-            .doc("SFEN")
-            .update({
-              position: [
-                "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 0"
-              ]
-            });
-        }
         let sfenboard = this.position.slice(-1)[0];
         let sfen = sfenboard.split(/[/\s]/);
         this.moves.turn = parseInt(sfen.slice(11, 12).toString());
 
+        this.capture = {
+          black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
+          white: { l: 0, n: 0, s: 0, g: 0, b: 0, r: 0, p: 0 }
+        };
         // 持ち駒情報をとってくる
         let capture = sfen
           .slice(10, 11)
@@ -161,14 +159,12 @@ export default {
               console.log(value, piece, num);
               if (piece.match(/[a-z]/)) this.white[piece] = num;
               if (piece.match(/[A-Z]/)) this.black[piece] = num;
+              // if (piece.match(/[a-z]/)) this.white[piece] = num;
+              // if (piece.match(/[A-Z]/)) this.black[piece] = num;
+              console.log(this.black);
             },
             this.capture
           );
-        } else {
-          this.capture = {
-            black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
-            white: { l: 0, n: 0, s: 0, g: 0, b: 0, r: 0, p: 0 }
-          };
         }
 
         var board = [[], [], [], [], [], [], [], [], []];
@@ -186,8 +182,7 @@ export default {
             }
           }, this);
         }, board);
-        console.log("Document:", board);
-        // this.shogiboard = board;
+        // console.log("Document:", board);
         this.board = board;
       }
     }
@@ -229,66 +224,36 @@ export default {
       return sfenboard;
     },
     popPosition(turn) {
-      console.log("POSITION(POP)", this.position);
-      let position = this.position.slice(0, turn);
+      // 一手も進んでいないときは戻せないようにする
+      if (this.moves.turn == 0) return;
+      if (turn == -1) this.moves.turn -= 1;
+      if (turn == 1) this.moves.turn = 0;
+      this.position = this.position.slice(0, turn);
+
       db.collection("KIF")
         .doc("SFEN")
         .update({
-          position: position
+          // moves: [],
+          position: this.position
         });
     },
-    getPosition() {
-      var isPromoted = false;
-      var move = this.moves.usi[this.moves.turn]
-        .replace(/a/g, "1")
-        .replace(/b/g, "2")
-        .replace(/c/g, "3")
-        .replace(/d/g, "4")
-        .replace(/e/g, "5")
-        .replace(/f/g, "6")
-        .replace(/g/g, "7")
-        .replace(/h/g, "8")
-        .replace(/i/g, "9");
-
-      // 駒台から打った場合
-      if (move.match(/\*/)) {
-        let piece = move[0];
-        move = "10" + move.substr(2, 2);
-        let prev = {
-          mX: -1,
-          mY: -1,
-          mPiece: this.moves.turn % 2 ? piece.toLowerCase() : piece
-        };
-        let next = {
-          mX: parseInt((move % 100) % 10) - 1,
-          mY: 9 - parseInt((move % 100) / 10),
-          mPiece: this.board[parseInt((move % 100) % 10) - 1][
-            9 - parseInt((move % 100) / 10)
-          ]
-        };
-        this.movePiece(prev, next, true, false, false);
-        return;
-      }
-      if (move.match(/\+/)) {
-        isPromoted = true;
-        move = move.replace(/\+/, "");
-      }
-      let prev = {
-        mX: parseInt((move / 100) % 10) - 1,
-        mY: 9 - parseInt(move / 100 / 10),
-        mPiece: this.board[parseInt((move / 100) % 10) - 1][
-          9 - parseInt(move / 100 / 10)
-        ]
-      };
-      let next = {
-        mX: parseInt((move % 100) % 10) - 1,
-        mY: 9 - parseInt((move % 100) / 10),
-        mPiece: this.board[parseInt((move % 100) % 10) - 1][
-          9 - parseInt((move % 100) / 10)
-        ]
-      };
-      console.log(move, prev, next);
-      this.movePiece(prev, next, false, isPromoted, false);
+    async showDialog() {
+      let isPromoted = await this.$dialog
+        .confirm(
+          {
+            title: "将棋にゃも v0.0.1",
+            body: "成りますか？"
+          },
+          { okText: "不成", cancelText: "成" }
+        )
+        .then(function() {
+          return false;
+        })
+        .catch(function() {
+          return true;
+        });
+      // console.log(isPromoted);
+      return isPromoted;
     },
     // コマを成る関数（だいたい完成している）
     isPromoted(mX, nX, nPiece) {
@@ -299,14 +264,14 @@ export default {
       // 先手のコマなら
       if (nPiece.match(/[A-Z]/)) {
         if (mX <= 2 || nX <= 2) {
-          return true;
+          return this.showDialog();
         }
         return false;
       }
       // 後手のコマなら
       if (nPiece.match(/[a-z]/)) {
         if (mX >= 6 || nX >= 6) {
-          return true;
+          return this.showDialog();
         }
         return false;
       }
@@ -329,10 +294,9 @@ export default {
       this.moves.prev.mY = current.mY;
       this.moves.prev.mPiece = current.mPiece;
       this.moves.prev.isCaptured = isCaptured;
-      // console.log(this.moves);
       return;
     },
-    movePiece(prev, next, isPlayer = true) {
+    async movePiece(prev, next) {
       // USI形式の指し手表示
       var usi_move = "";
 
@@ -357,7 +321,7 @@ export default {
         // 移動元を空マスにする
         this.board[prev.mX].splice(prev.mY, 1, "-");
         // 成り判定を加えてコマを置く
-        if (this.isPromoted(prev.mX, next.mX, prev.mPiece)) {
+        if (await this.isPromoted(prev.mX, next.mX, prev.mPiece)) {
           usi_move += "+";
           this.board[next.mX].splice(next.mY, 1, "+" + prev.mPiece);
         } else {
@@ -390,23 +354,14 @@ export default {
       this.moves.isPicked = false;
 
       // 結果を出力する
-      console.log(this.moves.turn, usi_move, this.buildSfen(), isPlayer);
+      console.log(this.moves.turn, usi_move, this.buildSfen());
       this.position.push(this.buildSfen());
       db.collection("KIF")
         .doc("SFEN")
         .update({
+          moves: usi_move,
           position: this.position
         });
-
-      // プレイヤーが指したのであれば更新する
-      // if (isPlayer) {
-      //   this.moves.usi.push(usi_move);
-      //   db.collection("KIF")
-      //     .doc("SFEN")
-      //     .update({
-      //       moves: this.moves.usi
-      //     });
-      // }
     },
     // コマを選択する
     pickPiece(current, isCaptured) {
@@ -856,6 +811,15 @@ li {
   padding: 3px;
 }
 
+.dg-main-content {
+  font-family: "Sawarabi Mincho";
+}
+
+.dg-content-cont--floating {
+  top: 45% !important;
+  opacity: 70%;
+}
+
 @media (max-width: 800px) {
   .board p {
     font-size: 6vw;
@@ -869,6 +833,7 @@ li {
     /* text-align: center; */
     margin-bottom: 0px !important;
   }
+
   .capture {
     display: inline-flex;
     /* justify-content: right; */
@@ -916,6 +881,15 @@ li {
     -ms-user-select: none;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  .dg-content,
+  .dg-title {
+    font-size: 4vw !important;
+  }
+
+  .dg-btn {
+    font-size: 3.5vw !important;
   }
 }
 
@@ -977,6 +951,15 @@ li {
     -ms-user-select: none;
     -webkit-user-select: none;
     user-select: none;
+  }
+
+  .dg-content,
+  .dg-title {
+    font-size: 32px !important;
+  }
+
+  .dg-btn {
+    font-size: 28px !important;
   }
 }
 </style>
