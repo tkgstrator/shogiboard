@@ -181,7 +181,6 @@ export default {
             }
           }, this);
         }, board);
-        // console.log("Document:", board);
 
         // 反転していたらボードを反転させる
         if (!this.player) {
@@ -189,22 +188,27 @@ export default {
             item.reverse();
           });
         }
+        // console.log("Document:", board, this.board);
         this.board = board;
+        // console.log("Document:", board, this.board);
       }
     }
   },
   methods: {
     rotation() {
-      console.log("一回しか呼ばれないよね？");
-      this.board.reverse().forEach(function(item) {
+      var board = this.board;
+      // console.log("Rotation:", board, this.board);
+      board.reverse().forEach(function(item) {
         item.reverse();
       });
       this.player = !this.player;
+      // this.board = board;
+      // console.log("Rotation:", board, this.board);
     },
     buildSfen() {
-      // 反転していたらボードを反転させる
+      let board = JSON.parse(JSON.stringify(this.board));
+      // ここで一回反転してるので描画が崩れる、ディープコピーすればいいはずだがどうするか...
       // 仮の変数を反転しているので描画には影響しないはず
-      let board = this.board;
 
       if (!this.player) {
         board.reverse().forEach(function(item) {
@@ -333,6 +337,8 @@ export default {
     },
     async movePiece(prev, next) {
       // USI形式の指し手表示
+      let board = this.board;
+      // console.log("MOVE PIECE", this.board);
       var usi_move = "";
 
       // 移動先が空マスでなければ手駒に加える
@@ -354,13 +360,13 @@ export default {
           (9 - next.mY) +
           this.rank[next.mX + 1];
         // 移動元を空マスにする
-        this.board[prev.mX].splice(prev.mY, 1, "-");
+        board[prev.mX].splice(prev.mY, 1, "-");
         // 成り判定を加えてコマを置く
         if (await this.isPromoted(prev.mX, next.mX, prev.mPiece)) {
           usi_move += "+";
-          this.board[next.mX].splice(next.mY, 1, "+" + prev.mPiece);
+          board[next.mX].splice(next.mY, 1, "+" + prev.mPiece);
         } else {
-          this.board[next.mX].splice(next.mY, 1, prev.mPiece);
+          board[next.mX].splice(next.mY, 1, prev.mPiece);
         }
       }
 
@@ -378,7 +384,7 @@ export default {
           this.capture.white[prev.mPiece.replace("+", "")] -= 1;
         }
         // 打ったコマを盤におく
-        this.board[next.mX].splice(next.mY, 1, prev.mPiece);
+        board[next.mX].splice(next.mY, 1, prev.mPiece);
       }
       // 手番を一つ増やす
       this.moves.turn += 1;
@@ -390,7 +396,7 @@ export default {
 
       // 結果を出力する
       // console.log(this.moves.turn, usi_move, this.buildSfen());
-      this.position.push(this.buildSfen());
+      this.position.push(this.buildSfen(board));
       db.collection("KIF")
         .doc("SFEN")
         .update({
@@ -400,6 +406,7 @@ export default {
     },
     // コマを選択する
     pickPiece(current, isCaptured) {
+      console.log("PICK PIECE", this.board);
       // コマを選択した状態なら
       if (this.moves.isPicked) {
         // 前状態を読み込む
@@ -421,6 +428,7 @@ export default {
       }
     },
     checkBitBoard(prev, next) {
+      let board = this.board;
       let nX = prev.mX;
       let nY = prev.mY;
       let mX = next.mX;
@@ -436,7 +444,7 @@ export default {
           case "L":
             if (Math.abs(mY - nY) == 0 && mX < nX) {
               for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                if (this.board[i][mY] != "-") {
+                if (board[i][mY] != "-") {
                   return false;
                 }
               }
@@ -484,7 +492,7 @@ export default {
                 (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
               ) {
                 for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                  if (this.board[i][mX + mY - i] != "-") {
+                  if (board[i][mX + mY - i] != "-") {
                     return false;
                   }
                 }
@@ -492,8 +500,7 @@ export default {
                 // 左上または右下に移動している
                 for (let i = 1; i < Math.abs(mX - nX); i++) {
                   if (
-                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
-                    "-"
+                    board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] != "-"
                   ) {
                     return false;
                   }
@@ -505,7 +512,7 @@ export default {
           case "R":
             if (Math.abs(mY - nY) == 0) {
               for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                if (this.board[i][mY] != "-") {
+                if (board[i][mY] != "-") {
                   return false;
                 }
               }
@@ -513,7 +520,7 @@ export default {
             }
             if (Math.abs(mX - nX) == 0) {
               for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
-                if (this.board[mX][i] != "-") {
+                if (board[mX][i] != "-") {
                   return false;
                 }
               }
@@ -537,7 +544,7 @@ export default {
                 (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
               ) {
                 for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                  if (this.board[i][mX + mY - i] != "-") {
+                  if (board[i][mX + mY - i] != "-") {
                     return false;
                   }
                 }
@@ -545,8 +552,7 @@ export default {
                 // 左上または右下に移動している
                 for (let i = 1; i < Math.abs(mX - nX); i++) {
                   if (
-                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
-                    "-"
+                    board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] != "-"
                   ) {
                     return false;
                   }
@@ -561,7 +567,7 @@ export default {
             }
             if (Math.abs(mY - nY) == 0) {
               for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                if (this.board[i][mY] != "-") {
+                if (board[i][mY] != "-") {
                   return false;
                 }
               }
@@ -569,7 +575,7 @@ export default {
             }
             if (Math.abs(mX - nX) == 0) {
               for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
-                if (this.board[mX][i] != "-") {
+                if (board[mX][i] != "-") {
                   return false;
                 }
               }
@@ -596,7 +602,7 @@ export default {
           case "L":
             if (Math.abs(mY - nY) == 0 && mX > nX) {
               for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                if (this.board[i][mY] != "-") {
+                if (board[i][mY] != "-") {
                   return false;
                 }
               }
@@ -645,7 +651,7 @@ export default {
                 (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
               ) {
                 for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                  if (this.board[i][mX + mY - i] != "-") {
+                  if (board[i][mX + mY - i] != "-") {
                     return false;
                   }
                 }
@@ -653,8 +659,7 @@ export default {
                 // 左上または右下に移動している
                 for (let i = 1; i < Math.abs(mX - nX); i++) {
                   if (
-                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
-                    "-"
+                    board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] != "-"
                   ) {
                     return false;
                   }
@@ -666,7 +671,7 @@ export default {
           case "R":
             if (Math.abs(mY - nY) == 0) {
               for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                if (this.board[i][mY] != "-") {
+                if (board[i][mY] != "-") {
                   return false;
                 }
               }
@@ -674,7 +679,7 @@ export default {
             }
             if (Math.abs(mX - nX) == 0) {
               for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
-                if (this.board[mX][i] != "-") {
+                if (board[mX][i] != "-") {
                   return false;
                 }
               }
@@ -697,7 +702,7 @@ export default {
                 (Math.min(mX, nX) == nX && Math.min(mY, nY) == mY)
               ) {
                 for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                  if (this.board[i][mX + mY - i] != "-") {
+                  if (board[i][mX + mY - i] != "-") {
                     return false;
                   }
                 }
@@ -705,8 +710,7 @@ export default {
                 // 左上または右下に移動している
                 for (let i = 1; i < Math.abs(mX - nX); i++) {
                   if (
-                    this.board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] !=
-                    "-"
+                    board[Math.min(mX, nX) + i][Math.min(mY, nY) + i] != "-"
                   ) {
                     return false;
                   }
@@ -721,7 +725,7 @@ export default {
             }
             if (Math.abs(mY - nY) == 0) {
               for (let i = Math.min(mX, nX) + 1; i < Math.max(mX, nX); i++) {
-                if (this.board[i][mY] != "-") {
+                if (board[i][mY] != "-") {
                   return false;
                 }
               }
@@ -729,7 +733,7 @@ export default {
             }
             if (Math.abs(mX - nX) == 0) {
               for (let i = Math.min(mY, nY) + 1; i < Math.max(mY, nY); i++) {
-                if (this.board[mX][i] != "-") {
+                if (board[mX][i] != "-") {
                   return false;
                 }
               }
@@ -752,7 +756,8 @@ export default {
     },
     // コマが移動可能かどうかを判定し、真理値を返す関数
     isMovable(prev, next) {
-      // console.log("isMovable", prev, next, prev.isCaptured);
+      // console.log("IS MOVABLE", this.board);
+      let board = this.board;
       // 同じ位置を選んだら選択を解除する
       if (prev.mX == next.mX && prev.mY == next.mY) {
         this.moves.prev.mX = null;
@@ -764,7 +769,7 @@ export default {
       // 持ち駒を打つ場合、移動先が空マスなら移動可能
       if (prev.isCaptured) {
         // console.log("持ち駒を打ちます");
-        if (this.board[next.mX][next.mY] == "-") {
+        if (board[next.mX][next.mY] == "-") {
           return true;
         }
         return false;
@@ -776,19 +781,19 @@ export default {
       }
 
       // 移動先が空マスであれば移動できる
-      if (this.board[next.mX][next.mY] == "-") {
+      if (board[next.mX][next.mY] == "-") {
         return true;
       }
 
       // 移動先が相手のコマであれば移動できる
       if (this.moves.turn % 2) {
-        if (this.board[next.mX][next.mY].match(/[A-Z]/) != null) {
+        if (board[next.mX][next.mY].match(/[A-Z]/) != null) {
           return true;
         } else {
           return false;
         }
       } else {
-        if (this.board[next.mX][next.mY].match(/[a-z]/) != null) {
+        if (board[next.mX][next.mY].match(/[a-z]/) != null) {
           return true;
         } else {
           return false;
@@ -859,7 +864,7 @@ li {
 
 .dg-content-cont--floating {
   top: 45% !important;
-  opacity: 70%;
+  /* opacity: 70%; */
 }
 
 @media (max-width: 800px) {
