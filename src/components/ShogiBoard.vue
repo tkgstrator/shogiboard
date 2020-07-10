@@ -160,7 +160,7 @@ export default {
               // console.log(value, piece, num);
               if (piece.match(/[a-z]/)) this.white[piece] = num;
               if (piece.match(/[A-Z]/)) this.black[piece] = num;
-              console.log(this.black);
+              // console.log(this.black);
             },
             this.capture
           );
@@ -182,20 +182,36 @@ export default {
           }, this);
         }, board);
         // console.log("Document:", board);
+
+        // 反転していたらボードを反転させる
+        if (!this.player) {
+          board.reverse().forEach(function(item) {
+            item.reverse();
+          });
+        }
         this.board = board;
       }
     }
   },
   methods: {
     rotation() {
+      console.log("一回しか呼ばれないよね？");
       this.board.reverse().forEach(function(item) {
         item.reverse();
       });
       this.player = !this.player;
-      console.log(this.player);
     },
     buildSfen() {
-      var sfen = this.board.toString().replace(/[,]/g, "");
+      // 反転していたらボードを反転させる
+      // 仮の変数を反転しているので描画には影響しないはず
+      let board = this.board;
+
+      if (!this.player) {
+        board.reverse().forEach(function(item) {
+          item.reverse();
+        });
+      }
+      var sfen = board.toString().replace(/[,]/g, "");
 
       var sfenboard = "";
       Array.prototype.forEach.call(sfen, function(value) {
@@ -373,7 +389,7 @@ export default {
       this.moves.isPicked = false;
 
       // 結果を出力する
-      console.log(this.moves.turn, usi_move, this.buildSfen());
+      // console.log(this.moves.turn, usi_move, this.buildSfen());
       this.position.push(this.buildSfen());
       db.collection("KIF")
         .doc("SFEN")
