@@ -1,10 +1,10 @@
 <template>
   <div class="shogiboard">
     <div class="player">
-      <p>☖後手</p>
+      <p>{{player ? "☖後手" : "☗先手"}}</p>
       <div class="capture">
         <div
-          v-for="(num, key) in capture.white"
+          v-for="(num, key) in (player ? capture.white : capture.black)"
           :key="key"
           @click="pickPiece({mX:-1, mY:-1, mPiece:key}, true)"
         >
@@ -20,24 +20,24 @@
       <div v-for="(item, i) in board" :key="i" class="container">
         <div v-for="(piece, j) in item" :key="j" class="edge">
           <p
-            :class="{'blackP': piece.match(/[A-Z]/), 'whiteP': piece.match(/[a-z]/), 'isSelect': (i == moves.prev.mX) && (j == moves.prev.mY), 'empty': piece.match(/[-]/)}"
+            :class="{'blackP': (piece.match(/[A-Z]/) && player) || (piece.match(/[a-z]/) && !player), 'whiteP': (piece.match(/[A-Z]/) && !player) || (piece.match(/[a-z]/) && player), 'isSelect': (i == moves.prev.mX) && (j == moves.prev.mY), 'empty': piece.match(/[-]/)}"
             @click="pickPiece({mX:i, mY:j, mPiece:piece}, false)"
           >{{ piece.match(/[A-z]/) ? pieces[piece.toUpperCase()] : "-"}}</p>
         </div>
       </div>
     </div>
     <div class="player">
-      <p>☗先手</p>
+      <p>{{!player ? "☖後手" : "☗先手"}}</p>
       <div class="capture">
         <div
-          v-for="(num, key) in capture.black"
+          v-for="(num, key) in (player ? capture.black : capture.white)"
           :key="key"
           @click="pickPiece({mX:-1, mY:-1, mPiece:key}, true)"
         >
           <template v-if="num!=0">
             <p
               :class="{'isSelect': moves.prev.mPiece == key && moves.prev.mX == -1}"
-            >{{ pieces[key] }}{{ num }}</p>
+            >{{ pieces[key.toUpperCase()] }}{{ num }}</p>
           </template>
         </div>
       </div>
@@ -50,10 +50,10 @@
         <li>
           <v-icon size="6.0vw" color="#67c5ff" @click="popPosition(-1)">mdi-menu-left-outline</v-icon>
         </li>
-        <!-- <li>
-          <v-icon size="6.0vw" color="#67c5ff" @click="getPosition(1, true)">mdi-menu-right-outline</v-icon>
-        </li>
         <li>
+          <v-icon size="6.0vw" color="#67c5ff" @click="rotation()">mdi-refresh</v-icon>
+        </li>
+        <!-- <li>
           <v-icon size="6.0vw" color="#67c5ff">mdi-skip-forward-outline</v-icon>
         </li>-->
       </ul>
@@ -70,6 +70,7 @@ export default {
     return {
       document: [],
       position: [],
+      player: true,
       board: [[], [], [], [], [], [], [], [], []],
       capture: {
         black: { L: 0, N: 0, S: 0, G: 0, B: 0, R: 0, P: 0 },
@@ -156,11 +157,9 @@ export default {
                 value.match(/[1-9]/) == null
                   ? 1
                   : parseInt(value.match(/[1-9]/).toString());
-              console.log(value, piece, num);
+              // console.log(value, piece, num);
               if (piece.match(/[a-z]/)) this.white[piece] = num;
               if (piece.match(/[A-Z]/)) this.black[piece] = num;
-              // if (piece.match(/[a-z]/)) this.white[piece] = num;
-              // if (piece.match(/[A-Z]/)) this.black[piece] = num;
               console.log(this.black);
             },
             this.capture
@@ -188,6 +187,13 @@ export default {
     }
   },
   methods: {
+    rotation() {
+      this.board.reverse().forEach(function(item) {
+        item.reverse();
+      });
+      this.player = !this.player;
+      console.log(this.player);
+    },
     buildSfen() {
       var sfen = this.board.toString().replace(/[,]/g, "");
 
@@ -229,6 +235,7 @@ export default {
       if (turn == -1) this.moves.turn -= 1;
       if (turn == 1) this.moves.turn = 0;
       this.position = this.position.slice(0, turn);
+      this.moves.usi = this.moves.usi.slice(0, turn);
 
       db.collection("KIF")
         .doc("SFEN")
@@ -262,15 +269,27 @@ export default {
         return false;
       }
       // 先手のコマなら
-      if (nPiece.match(/[A-Z]/)) {
+      if (nPiece.match(/[A-Z]/) && this.player) {
         if (mX <= 2 || nX <= 2) {
           return this.showDialog();
         }
         return false;
       }
-      // 後手のコマなら
-      if (nPiece.match(/[a-z]/)) {
+      if (nPiece.match(/[A-Z]/) && !this.player) {
         if (mX >= 6 || nX >= 6) {
+          return this.showDialog();
+        }
+        return false;
+      }
+      // 後手のコマなら
+      if (nPiece.match(/[a-z]/) && this.player) {
+        if (mX >= 6 || nX >= 6) {
+          return this.showDialog();
+        }
+        return false;
+      }
+      if (nPiece.match(/[a-z]/) && !this.player) {
+        if (mX <= 2 || nX <= 2) {
           return this.showDialog();
         }
         return false;
@@ -391,8 +410,12 @@ export default {
       let mX = next.mX;
       let mY = next.mY;
       let nPiece = prev.mPiece;
+
       // コマによる移動の制約チェック
-      if (nPiece.match(/[A-Z]/)) {
+      if (
+        (nPiece.match(/[A-Z]/) && this.player) ||
+        (nPiece.match(/[a-z]/) && !this.player)
+      ) {
         switch (nPiece.toUpperCase()) {
           case "L":
             if (Math.abs(mY - nY) == 0 && mX < nX) {
@@ -549,7 +572,10 @@ export default {
         }
         return false;
       }
-      if (nPiece.match(/[a-z]/)) {
+      if (
+        (nPiece.match(/[a-z]/) && this.player) ||
+        (nPiece.match(/[A-Z]/) && !this.player)
+      ) {
         switch (nPiece.toUpperCase()) {
           case "L":
             if (Math.abs(mY - nY) == 0 && mX > nX) {
